@@ -1,0 +1,315 @@
+#FIND_S - PROGRAM 1
+import csv
+file=open('data.csv')
+data=list(csv.reader(file))
+length=len(data[0])-1
+h=['0']*length
+print('Initial Hypothesis:',h,'\n')
+print('Data:')
+for i in data:
+	print(i)
+columns=data.pop(0)
+for i in range(len(data)):
+	if data[i][length]=='yes':
+		for j in range(len(data[i])-1):
+			if h[j]=='0':
+				h[j]=data[i][j]
+			if h[j]!=data[i][j]:
+				h[j]='?'
+print('\nFinal Hypothesis:',h)
+
+
+
+#CANDIDATE_ELIMINATION - PROGRAM 2
+import csv
+file=open('data2.csv')
+data=list(csv.reader(file))[1:]
+concepts=[]
+target=[]
+for i in data:
+    concepts.append(i[:-1])
+    target.append(i[-1])
+specific_h = concepts[0].copy()
+general_h= [['?' for i in range(len(specific_h))] for i in range(len(specific_h))]
+for i,h in enumerate(concepts):
+    if target[i]=="yes":
+        for x in range(len(specific_h)):
+            if h[x]!=specific_h[x]:
+                specific_h[x]='?'
+                general_h[x][x] = '?'          
+    if target[i]=="no":
+        for x in range(len(specific_h)):
+            if h[x]!= specific_h[x]:
+                general_h[x][x]=specific_h[x]
+            else:
+                general_h[x][x]='?'   
+indices=[i for i,val in enumerate(general_h) if val == ['?']*len(specific_h)]
+for i in indices:
+    general_h.remove(['?']*len(specific_h))
+print("Final S:",specific_h,sep="\n")
+print("Final G:",general_h,sep="\n")
+
+
+#ID3 - PROGRAM 3
+import pandas as pd
+df_tennis = pd.read_csv('data3.csv')
+from collections import Counter
+def entropy_list(a_list):
+    cnt = Counter(x for x in a_list)
+    num_instance = len(a_list)*1.0
+    probs = [x/num_instance for x in cnt.values()]
+    return entropy(probs)
+import math
+def entropy(probs):
+    return sum([-prob*math.log(prob,2) for prob in probs])
+def info_gain(df,split,target,trace=0):
+    df_split = df.groupby(split)
+    nobs = len(df.index)*1.0
+    df_agg_ent = df_split.agg({ target:[entropy_list, lambda x: len(x)/nobs] })
+    df_agg_ent.columns = ['Entropy','PropObserved']
+    new_entropy = sum( df_agg_ent['Entropy'] * df_agg_ent["PropObserved"])
+    old_entropy = entropy_list(df[target])
+    return old_entropy - new_entropy
+def id3(df,target,attribute_name,default_class = None):
+    cnt = Counter(x for x in df[target])
+    if len(cnt)==1:
+        return next(iter(cnt))
+    elif df.empty or (not attribute_name):
+        return default_class
+    else:
+        default_class = max(cnt.keys())
+        gains = [info_gain(df,attr,target) for attr in attribute_name]
+        index_max = gains.index(max(gains))
+        best_attr = attribute_name[index_max]
+        tree = { best_attr:{ } }
+        remaining_attr = [x for x in attribute_name if x!=best_attr]
+        for attr_val, data_subset in df.groupby(best_attr):
+            subtree = id3(data_subset,target,remaining_attr,default_class)
+            tree[best_attr][attr_val] = subtree
+        return tree
+def classify(instance,tree,default = None):
+    attribute = next(iter(tree))
+    if instance[attribute] in tree[attribute].keys():
+        result = tree[attribute][instance[attribute]]
+        if isinstance(result,dict):
+            return classify(instance,result)
+        else:
+            return result
+    else:
+        return default
+attribute_names = list(df_tennis.columns)
+attribute_names.remove('PlayTennis') #Remove the class attribute
+tree = id3(df_tennis,'PlayTennis',attribute_names)
+print("\n\nThe Resultant Decision Tree is :\n")
+print(tree)
+training_data = df_tennis.iloc[1:-4] # all but last thousand instances
+test_data = df_tennis.iloc[-4:] # just the last thousand
+train_tree = id3(training_data, 'PlayTennis', attribute_names)
+print("\n\nThe Resultant Decision train_tree is :\n")
+print(train_tree)
+test_data['predicted2'] = test_data.apply(classify,axis=1,args=(train_tree,'Yes') )
+print ('\n\n Training the model for a few samples, and again predicting \'Playtennis\' for remaining attribute')
+print('The Accuracy for new trained data is : ' + str( sum(test_data['PlayTennis']==test_data['predicted2'] ) / (1.0*len(test_data.index)) ))
+
+
+#ANN_BACKPROPAGATION - PROGRAM 4
+import numpy as np
+X = np.array(([2, 9], [1, 5], [3, 6]), dtype=float)
+y = np.array(([92], [86], [89]), dtype=float)
+X = X/np.amax(X,axis=0) # maximum of X array longitudinally
+y = y/100
+#Sigmoid Function
+def sigmoid (x):
+    return 1/(1 + np.exp(-x))
+#Derivative of Sigmoid Function
+def derivatives_sigmoid (x):
+    return x*(1-x)
+#Variable initialization
+epoch=7000 #Setting training iterations
+lr=0.1 #Setting learning rate
+inputlayer_neurons = 2 #number of features in data set
+hiddenlayer_neurons = 3 #number of hidden layers neurons
+output_neurons = 1 #number of neurons at output layer
+#weight and bias initialization
+wh=np.random.uniform(size=(inputlayer_neurons,hiddenlayer_neurons))
+bh=np.random.uniform(size=(1,hiddenlayer_neurons))
+wout=np.random.uniform(size=(hiddenlayer_neurons,output_neurons))
+bout=np.random.uniform(size=(1,output_neurons))
+#draws a random range of numbers uniformly of dim x*y
+for i in range(epoch):
+#Forward Propogation
+    hinp1=np.dot(X,wh)
+    hinp=hinp1 + bh
+    hlayer_act = sigmoid(hinp)
+    outinp1=np.dot(hlayer_act,wout)
+    outinp= outinp1+ bout
+    output = sigmoid(outinp)
+#Backpropagation
+    EO = y-output
+    outgrad = derivatives_sigmoid(output)
+    d_output = EO* outgrad
+    EH = d_output.dot(wout.T)
+    hiddengrad = derivatives_sigmoid(hlayer_act)
+#how much hidden layer wts contributed to error
+    d_hiddenlayer = EH * hiddengrad
+    wout += hlayer_act.T.dot(d_output) *lr
+# dotproduct of nextlayererror and currentlayerop
+# bout += np.sum(d_output, axis=0,keepdims=True) *lr
+    wh += X.T.dot(d_hiddenlayer) *lr
+#bh += np.sum(d_hiddenlayer, axis=0,keepdims=True) *lr
+print("Input: \n" + str(X)) 
+print("Actual Output: \n" + str(y))
+print("Predicted Output: \n" ,output)
+
+
+#NB_CLASSIFIER_1 - PROGRAM 5
+import csv,math,random,statistics
+random.seed(10)
+def prob(x,mean,stdev):
+    e=math.exp(-(math.pow(x-mean,2))/(2*math.pow(stdev,2)))
+    return (1/(math.sqrt(2*math.pi)*stdev))*e
+file=open('data5.csv')
+data=[[float(a) for a in row] for row in csv.reader(file)]
+print('Size of dataset is: ',len(data))
+train_indices=random.sample(range(len(data)),int(0.7*len(data)))
+xtrain=[data[i] for i in train_indices]
+xtest=[data[i] for i in range(len(data)) if i not in train_indices]
+classes={}
+for samples in xtrain:
+    last=int(samples[-1])
+    if last not in classes:
+        classes[last]=[]
+    classes[last].append(samples)
+summaries={}
+for classVal,traindata in classes.items():
+    summary=[(statistics.mean(attr),statistics.stdev(attr)) for attr in zip(*traindata)]
+    del summary[-1]
+    summaries[classVal]=summary
+prediction=[]
+for test in xtest:
+    probs={}
+    for classVal,summary in summaries.items():
+        probs[classVal]=1
+        for i,attr in enumerate(summary):
+            probs[classVal]*=prob(test[i],attr[0],attr[1])
+        bestlabel,bestprob=None,0
+
+    for classVal,p in probs.items():
+        if bestlabel is None or p>bestprob:
+            bestprob=p
+            bestlabel=classVal
+    prediction.append(bestlabel)
+correct=0
+for i,key in enumerate(xtest):
+    if xtest[i][-1]==prediction[i]:
+        correct+=1
+print("Accuracy: ",correct*100/len(xtest))
+
+
+#NB_CLASSIFIER_2 - PROGRAM 6
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import CountVectorizer,TfidfTransformer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline
+from sklearn import metrics
+categories=['alt.atheism','soc.religion.christian','comp.graphics','sci.med']
+X_train=fetch_20newsgroups(subset='train',categories=categories,shuffle=True,random_state=42)
+text_clf=Pipeline([('vect',CountVectorizer()),
+                   ('tfidf',TfidfTransformer()),
+                   ('clf',MultinomialNB())])
+text_clf.fit(X_train.data,X_train.target)
+X_test=fetch_20newsgroups(subset='test',categories=categories,shuffle=True,random_state=42)
+predicted=text_clf.predict(X_test.data)
+print(metrics.accuracy_score(predicted,X_test.target))
+print(metrics.classification_report(X_test.target,predicted,target_names=X_test.target_names))
+print(metrics.confusion_matrix(X_test.target,predicted))
+
+
+#BAYESIAN_NETWORK - PROGRAM 7
+import pandas as pd,csv,numpy as np
+from pgmpy.estimators import MaximumLikelihoodEstimator
+from pgmpy.models import BayesianModel
+from pgmpy.inference import VariableElimination
+attrs=list(csv.reader(open('data7_names.csv')))[0]
+data=pd.read_csv('data7_heart.csv',names=attrs)
+print("Head of Data:\n",data.head())
+data=data.replace('?',np.nan)
+model=BayesianModel([('age','trestbps'),('age','fbs'),('sex','trestbps'),
+                     ('exang','trestbps'),('trestbps','heartdisease'),
+                     ('fbs','heartdisease'),('heartdisease','restecg'),('heartdisease','thalach'),('heartdisease','chol')])
+model.fit(data,estimator=MaximumLikelihoodEstimator)
+data_infer=VariableElimination(model)
+print('P(heartdisease|Age=20)')
+q=data_infer.query(variables=['heartdisease'],evidence={'age':60}, joint=False)
+print(q['heartdisease'])
+print('P(heartdisease|cholestrol=100)')
+q=data_infer.query(variables=['heartdisease'],evidence={'chol':250}, joint=False)
+print(q['heartdisease'])
+print('P(heartdisease|trestbps=100)')
+q=data_infer.query(variables=['heartdisease'],evidence={'trestbps':150}, joint=False)
+print(q['heartdisease'])
+
+
+#EM_ALGORITHM - PROGRAM 8
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_iris
+import pandas as pd
+import numpy as np
+np.random.seed(2)
+iris=load_iris()
+x=pd.DataFrame(iris.data)
+y=pd.DataFrame(iris.target)
+colormap=np.array(['red','blue','green'])
+from sklearn.cluster import KMeans
+kmeans=KMeans(n_clusters=3).fit(x)
+plt.subplot(1,2,2)
+plt.title("KMeans")
+plt.scatter(x[2],x[3],c=colormap[kmeans.labels_])
+import sklearn.metrics as sm
+print('K Means Accuracy:',sm.accuracy_score(y,kmeans.labels_))
+from sklearn.mixture import GaussianMixture
+gm=GaussianMixture(n_components=3).fit(x)
+ycluster=gm.predict(x)
+plt.subplot(1,2,1)
+plt.title("EM")
+plt.scatter(x[2],x[3],c=colormap[ycluster])
+print('EM Accuracy:',sm.accuracy_score(y,ycluster))
+print(sm.confusion_matrix(y,ycluster))
+
+
+#KNN_ALGORITHM - PROGRAM 9
+from sklearn.datasets import load_iris
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+iris_dataset=load_iris()
+X_train, X_test, y_train, y_test = train_test_split(iris_dataset["data"], iris_dataset
+["target"], random_state=0)
+kn = KNeighborsClassifier()
+kn.fit(X_train, y_train)
+prediction = kn.predict(X_test)
+print("ACCURACY:"+ str(kn.score(X_test, y_test)))
+plt.plot(X_test,y_test,'ro')
+plt.plot(X_test,prediction,'b+')
+target_names = iris_dataset.target_names
+print(target_names)
+for pred,actual in zip(prediction,y_test):
+	print("Prediction:"+str(target_names[pred])+",Actual:" +str(target_names[actual]))
+
+
+#LOCALLY_WEIGHTED_REGRESSION_ALGORITHM - PROGRAM 10
+import numpy as np
+import matplotlib.pyplot as plt
+xtrain=np.array(list(range(3,35))).reshape(32,1)
+ytrain=np.sin(xtrain)+xtrain**0.75
+xtest=np.array([i/10 for i in range(400)]).reshape(400,1)
+ytest=[]
+for r in range(len(xtest)):
+    w=np.diag(np.exp(-np.sum((xtrain-xtest[r])**2,axis=1)/(2*0.5**2)))
+    f1=np.linalg.inv(xtrain.T.dot(w).dot(xtrain))
+    params=f1.dot(xtrain.T).dot(w).dot(ytrain)
+    pred=xtest[r].dot(params)
+    ytest.append(pred)
+plt.plot(xtrain,ytrain,'o')
+plt.plot(xtest,ytest,'-')  
+
