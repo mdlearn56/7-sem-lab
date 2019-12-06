@@ -1,0 +1,21 @@
+import csv
+file=open('dataset.csv') #Read csv data
+data=list(csv.reader(file)) #Convert into list format
+length=len(data[0])-1 #-1 because we don't need the target variable
+h=['0']*length #Initial hypothesis
+print("Initial Hypothesis:",h)
+print('Data:')
+for i in data:
+	print(i)
+print("Steps in Find-S")
+col=data.pop(0) #Removing the column names
+for i in range(len(data)):
+	if data[i][length]=='yes':
+		for j in range (len(data[i])-1):
+			if h[j]=='0':
+				h[j]=data[i][j]
+			if h[j]!=data[i][j]:
+				h[j]='?'
+	print(h)
+print("")
+print("Final Hypothesis(Most Specific):",h)
